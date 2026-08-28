@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { BrandLockup } from "@/components/brand/brand-logo";
@@ -7,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth/auth-context";
+import { ensureAdminAccount } from "@/lib/auth/onboarding.functions";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -27,6 +29,13 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const bootstrapAdmin = useServerFn(ensureAdminAccount);
+
+  // The workspace is invitation-only, so the very first sign-in needs the
+  // configured administrator account to exist. This call is idempotent.
+  useEffect(() => {
+    void bootstrapAdmin({ data: undefined }).catch(() => undefined);
+  }, [bootstrapAdmin]);
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
