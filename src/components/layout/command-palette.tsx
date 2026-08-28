@@ -53,7 +53,7 @@ export function CommandPalette({
 
   const go = (href: string) => {
     onOpenChange(false);
-    void navigate({ to: href });
+    void navigate({ to: href as never });
   };
 
   return (
