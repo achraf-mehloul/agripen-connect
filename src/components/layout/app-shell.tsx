@@ -56,7 +56,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {items.map((item) => (
             <Link
               key={item.to}
-              to={item.to}
+              to={item.to as never}
               className={cn(
                 "surface-hover flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-sm font-medium text-sidebar-foreground",
                 isActive(item.to) &&
@@ -156,7 +156,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             {mobileItems.map((item) => (
               <li key={item.to}>
                 <Link
-                  to={item.to}
+                  to={item.to as never}
                   className={cn(
                     "flex flex-col items-center gap-1 py-2.5 text-[0.65rem] font-medium text-muted-foreground",
                     isActive(item.to) && "text-primary",
@@ -196,7 +196,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               {items.map((item) => (
                 <Link
                   key={item.to}
-                  to={item.to}
+                  to={item.to as never}
                   className={cn(
                     "surface-hover flex items-center gap-3 rounded-xl border border-transparent px-3 py-2.5 text-sm font-medium",
                     isActive(item.to) && "border-border-strong bg-sidebar-accent",

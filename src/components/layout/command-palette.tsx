@@ -53,11 +53,11 @@ export function CommandPalette({
 
   const go = (href: string) => {
     onOpenChange(false);
-    void navigate({ to: href });
+    void navigate({ to: href as never });
   };
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange} title="Search AgriPen">
+    <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
         value={term}
         onValueChange={setTerm}
