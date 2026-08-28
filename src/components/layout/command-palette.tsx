@@ -57,7 +57,7 @@ export function CommandPalette({
   };
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange} title="Search AgriPen">
+    <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
         value={term}
         onValueChange={setTerm}
