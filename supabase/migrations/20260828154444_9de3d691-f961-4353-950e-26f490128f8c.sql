@@ -1,0 +1,10 @@
+REVOKE EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.is_admin() FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.is_group_member(uuid) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.can_view_group(uuid) FROM anon, public;
+REVOKE EXECUTE ON FUNCTION public.is_conversation_participant(uuid) FROM anon, public;
+GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_group_member(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.can_view_group(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_conversation_participant(uuid) TO authenticated;
