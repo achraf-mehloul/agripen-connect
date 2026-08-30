@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth/auth-context";
 import { formatBytes } from "@/lib/format";
 import { createClientId } from "@/lib/ids";
+import { prepareFiles } from "@/services/media-service";
 import { createPost } from "@/services/post-service";
 import {
   classifyFile,
