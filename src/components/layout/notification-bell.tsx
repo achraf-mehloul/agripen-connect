@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Bell } from "lucide-react";
-import { useEffect } from "react";
+import { Bell, BellRing } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -9,6 +10,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { formatRelative } from "@/lib/format";
+import {
+  notificationPermission,
+  notificationsEnabled,
+  requestNotificationPermission,
+  showDeviceNotification,
+} from "@/lib/notifications/device-notifications";
 import { fetchNotifications, markNotificationsRead } from "@/services/workspace-service";
 
 export function NotificationBell() {
