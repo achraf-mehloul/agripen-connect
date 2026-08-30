@@ -52,8 +52,8 @@ export async function showDeviceNotification(input: {
     body: input.body ?? "",
     icon: "/assets/branding/pwa-192.png",
     badge: "/assets/branding/pwa-192.png",
-    tag: input.tag,
     data: { link: input.link ?? "/dashboard" },
+    ...(input.tag ? { tag: input.tag } : {}),
   };
 
   try {
