@@ -108,6 +108,15 @@ export function NotificationBell() {
             </button>
           ) : null}
         </div>
+        {!pushOn && permission !== "unsupported" ? (
+          <button
+            onClick={() => void enablePush()}
+            className="flex w-full items-center gap-2 border-b border-border px-4 py-2.5 text-left text-xs font-medium text-primary transition-colors hover:bg-primary-soft"
+          >
+            <BellRing className="h-3.5 w-3.5" />
+            Turn on device notifications
+          </button>
+        ) : null}
         <ScrollArea className="max-h-80">
           {notifications.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
