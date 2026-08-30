@@ -57,17 +57,19 @@ export function ChatThread({ channel, title }: { channel: ChannelRef; title: str
   const mutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("You must be signed in.");
-      const attachments: NewAttachmentInput[] = [];
-      for (const file of files) {
-        const path = await uploadToWorkspace(user.id, file, file.name, { folder: "chat" });
-        attachments.push({
-          storage_path: path,
-          file_name: file.name,
-          mime_type: file.type || "application/octet-stream",
-          size_bytes: file.size,
-          kind: classifyFile(file.type),
-        });
-      }
+      const prepared = await prepareFiles(files);
+      const attachments: NewAttachmentInput[] = await Promise.all(
+        prepared.map(async (file) => {
+          const path = await uploadToWorkspace(user.id, file, file.name, { folder: "chat" });
+          return {
+            storage_path: path,
+            file_name: file.name,
+            mime_type: file.type || "application/octet-stream",
+            size_bytes: file.size,
+            kind: classifyFile(file.type),
+          } satisfies NewAttachmentInput;
+        }),
+      );
       return sendMessage({
         clientId: createClientId("msg"),
         authorId: user.id,
