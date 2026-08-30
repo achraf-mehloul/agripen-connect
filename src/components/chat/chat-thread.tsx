@@ -11,6 +11,7 @@ import { useAuth } from "@/lib/auth/auth-context";
 import { formatBytes, formatClock, fullName } from "@/lib/format";
 import { createClientId } from "@/lib/ids";
 import { cn } from "@/lib/utils";
+import { prepareFiles } from "@/services/media-service";
 import type { ChannelRef } from "@/services/message-service";
 import { fetchMessages, sendMessage } from "@/services/message-service";
 import {
