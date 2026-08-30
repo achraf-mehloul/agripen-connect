@@ -30,6 +30,14 @@ export function NotificationBell() {
     enabled: Boolean(userId),
   });
 
+  const [pushOn, setPushOn] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+
+  useEffect(() => {
+    setPermission(notificationPermission());
+    setPushOn(notificationsEnabled());
+  }, []);
+
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
@@ -42,13 +50,32 @@ export function NotificationBell() {
           table: "notifications",
           filter: `user_id=eq.${userId}`,
         },
-        () => void queryClient.invalidateQueries({ queryKey: ["notifications", userId] }),
+        (payload) => {
+          void queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
+          const row = payload.new as { id?: string; title?: string; body?: string; link?: string | null };
+          void showDeviceNotification({
+            title: row.title ?? "AgriPen",
+            body: row.body ?? "",
+            link: row.link ?? null,
+            ...(row.id ? { tag: row.id } : {}),
+          });
+        },
       )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
   }, [queryClient, userId]);
+
+  const enablePush = async () => {
+    const result = await requestNotificationPermission();
+    setPermission(result);
+    setPushOn(notificationsEnabled());
+    if (result === "granted") toast.success("Device notifications are on");
+    else if (result === "denied")
+      toast.error("Notifications are blocked in your browser settings");
+    else if (result === "unsupported") toast.error("This device does not support notifications");
+  };
 
   const markRead = useMutation({
     mutationFn: () => markNotificationsRead(userId!),
