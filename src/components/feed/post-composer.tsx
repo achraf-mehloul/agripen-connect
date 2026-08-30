@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth/auth-context";
 import { formatBytes } from "@/lib/format";
 import { createClientId } from "@/lib/ids";
+import { prepareFiles } from "@/services/media-service";
 import { createPost } from "@/services/post-service";
 import {
   classifyFile,
@@ -35,17 +36,20 @@ export function PostComposer({ groups }: { groups: Group[] }) {
   const mutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("You must be signed in.");
-      const attachments: NewAttachmentInput[] = [];
-      for (const file of files) {
-        const path = await uploadToWorkspace(user.id, file, file.name, { folder: "feed" });
-        attachments.push({
-          storage_path: path,
-          file_name: file.name,
-          mime_type: file.type || "application/octet-stream",
-          size_bytes: file.size,
-          kind: classifyFile(file.type),
-        });
-      }
+      // Shrink photos in the browser, then upload every attachment in parallel.
+      const prepared = await prepareFiles(files);
+      const attachments: NewAttachmentInput[] = await Promise.all(
+        prepared.map(async (file) => {
+          const path = await uploadToWorkspace(user.id, file, file.name, { folder: "feed" });
+          return {
+            storage_path: path,
+            file_name: file.name,
+            mime_type: file.type || "application/octet-stream",
+            size_bytes: file.size,
+            kind: classifyFile(file.type),
+          } satisfies NewAttachmentInput;
+        }),
+      );
       const kind: PostKind = attachments.length
         ? attachments[0]!.kind === "image"
           ? "image"

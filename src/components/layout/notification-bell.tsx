@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { Bell } from "lucide-react";
-import { useEffect } from "react";
+import { Bell, BellRing } from "lucide-react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -9,6 +10,12 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { formatRelative } from "@/lib/format";
+import {
+  notificationPermission,
+  notificationsEnabled,
+  requestNotificationPermission,
+  showDeviceNotification,
+} from "@/lib/notifications/device-notifications";
 import { fetchNotifications, markNotificationsRead } from "@/services/workspace-service";
 
 export function NotificationBell() {
@@ -23,6 +30,14 @@ export function NotificationBell() {
     enabled: Boolean(userId),
   });
 
+  const [pushOn, setPushOn] = useState(false);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">("default");
+
+  useEffect(() => {
+    setPermission(notificationPermission());
+    setPushOn(notificationsEnabled());
+  }, []);
+
   useEffect(() => {
     if (!userId) return;
     const channel = supabase
@@ -35,13 +50,32 @@ export function NotificationBell() {
           table: "notifications",
           filter: `user_id=eq.${userId}`,
         },
-        () => void queryClient.invalidateQueries({ queryKey: ["notifications", userId] }),
+        (payload) => {
+          void queryClient.invalidateQueries({ queryKey: ["notifications", userId] });
+          const row = payload.new as { id?: string; title?: string; body?: string; link?: string | null };
+          void showDeviceNotification({
+            title: row.title ?? "AgriPen",
+            body: row.body ?? "",
+            link: row.link ?? null,
+            ...(row.id ? { tag: row.id } : {}),
+          });
+        },
       )
       .subscribe();
     return () => {
       void supabase.removeChannel(channel);
     };
   }, [queryClient, userId]);
+
+  const enablePush = async () => {
+    const result = await requestNotificationPermission();
+    setPermission(result);
+    setPushOn(notificationsEnabled());
+    if (result === "granted") toast.success("Device notifications are on");
+    else if (result === "denied")
+      toast.error("Notifications are blocked in your browser settings");
+    else if (result === "unsupported") toast.error("This device does not support notifications");
+  };
 
   const markRead = useMutation({
     mutationFn: () => markNotificationsRead(userId!),
@@ -74,6 +108,15 @@ export function NotificationBell() {
             </button>
           ) : null}
         </div>
+        {!pushOn && permission !== "unsupported" ? (
+          <button
+            onClick={() => void enablePush()}
+            className="flex w-full items-center gap-2 border-b border-border px-4 py-2.5 text-left text-xs font-medium text-primary transition-colors hover:bg-primary-soft"
+          >
+            <BellRing className="h-3.5 w-3.5" />
+            Turn on device notifications
+          </button>
+        ) : null}
         <ScrollArea className="max-h-80">
           {notifications.length === 0 ? (
             <p className="px-4 py-8 text-center text-sm text-muted-foreground">
