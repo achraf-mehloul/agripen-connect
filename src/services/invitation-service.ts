@@ -50,8 +50,9 @@ export async function revokeInvitation(id: string) {
 
 export function invitationLink(token: string): string {
   const origin = typeof window === "undefined" ? "" : window.location.origin;
-  return `${origin}/auth?invite=${token}`;
+  return `${origin}/invite/${token}`;
 }
+
 
 export function invitationStatus(invitation: Invitation): "used" | "revoked" | "expired" | "active" {
   if (invitation.used_at) return "used";
