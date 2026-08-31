@@ -57,8 +57,10 @@ function FilesPage() {
   const folders = useQuery({ queryKey: ["file-folders"], queryFn: fetchFolders });
   const files = useQuery({
     queryKey: ["files", folderId ?? "all", search],
-    queryFn: () => fetchFiles({ folderId: folderId ?? undefined, search }),
+    queryFn: () =>
+      folderId === undefined ? fetchFiles({ search }) : fetchFiles({ folderId, search }),
   });
+
   const summary = useQuery({ queryKey: ["storage-summary"], queryFn: fetchStorageSummary });
 
   const refresh = () => {
