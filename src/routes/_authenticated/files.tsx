@@ -129,8 +129,10 @@ function FilesPage() {
   const onDownload = async (file: FileWithUploader) => {
     try {
       const url = await getSignedUrl(file.storage_path);
+      if (!url) throw new Error("no url");
       window.open(url, "_blank", "noopener");
     } catch {
+
       toast.error("Could not open that file");
     }
   };
