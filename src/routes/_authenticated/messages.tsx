@@ -51,6 +51,8 @@ function MessagesPage() {
       setConversationId(conversation.id);
       void queryClient.invalidateQueries({ queryKey: ["conversations", user?.id] });
     },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Conversation could not be opened"),
   });
 
   useEffect(() => {
