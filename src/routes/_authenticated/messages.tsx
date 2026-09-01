@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { ChatThread } from "@/components/chat/chat-thread";
 import { UserAvatar } from "@/components/common/user-avatar";
@@ -51,6 +52,8 @@ function MessagesPage() {
       setConversationId(conversation.id);
       void queryClient.invalidateQueries({ queryKey: ["conversations", user?.id] });
     },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Conversation could not be opened"),
   });
 
   useEffect(() => {
