@@ -1,6 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Paperclip, Send, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, CheckCheck, Loader2, Paperclip, Send, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { UserAvatar } from "@/components/common/user-avatar";
@@ -13,7 +13,7 @@ import { createClientId } from "@/lib/ids";
 import { cn } from "@/lib/utils";
 import { prepareFiles } from "@/services/media-service";
 import type { ChannelRef } from "@/services/message-service";
-import { fetchMessages, sendMessage } from "@/services/message-service";
+import { fetchMessages, fetchPartnerReadAt, sendMessage } from "@/services/message-service";
 import {
   classifyFile,
   uploadToWorkspace,
@@ -25,18 +25,35 @@ function channelKey(channel: ChannelRef): string {
   return "groupId" in channel ? `group:${channel.groupId}` : `dm:${channel.conversationId}`;
 }
 
+type UploadJob = {
+  id: string;
+  label: string;
+  percent: number;
+  phase: "preparing" | "uploading" | "sending";
+};
+
 export function ChatThread({ channel, title }: { channel: ChannelRef; title: string }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const key = channelKey(channel);
+  const conversationId = "conversationId" in channel ? channel.conversationId : null;
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [body, setBody] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [jobs, setJobs] = useState<UploadJob[]>([]);
 
   const messages = useQuery({
     queryKey: ["messages", key],
     queryFn: () => fetchMessages(channel),
+  });
+
+  // Read receipts: the other participant's last_read_at, refreshed live.
+  const partnerRead = useQuery({
+    queryKey: ["partner-read", conversationId, user?.id],
+    queryFn: () => fetchPartnerReadAt(conversationId!, user!.id),
+    enabled: Boolean(conversationId && user?.id),
+    refetchInterval: 20_000,
   });
 
   useEffect(() => {
@@ -52,41 +69,114 @@ export function ChatThread({ channel, title }: { channel: ChannelRef; title: str
   }, [key, queryClient]);
 
   useEffect(() => {
+    if (!conversationId) return;
+    const subscription = supabase
+      .channel(`reads-${conversationId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversation_participants",
+          filter: `conversation_id=eq.${conversationId}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({
+            queryKey: ["partner-read", conversationId, user?.id],
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(subscription);
+    };
+  }, [conversationId, queryClient, user?.id]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages.data?.length]);
 
-  const mutation = useMutation({
-    mutationFn: async () => {
-      if (!user) throw new Error("You must be signed in.");
-      const prepared = await prepareFiles(files);
-      const attachments: NewAttachmentInput[] = await Promise.all(
-        prepared.map(async (file) => {
-          const path = await uploadToWorkspace(user.id, file, file.name, { folder: "chat" });
-          return {
-            storage_path: path,
-            file_name: file.name,
-            mime_type: file.type || "application/octet-stream",
-            size_bytes: file.size,
-            kind: classifyFile(file.type),
-          } satisfies NewAttachmentInput;
-        }),
-      );
-      return sendMessage({
+  const busy = jobs.length > 0;
+
+  /**
+   * Sends in the background: the composer clears immediately, then each
+   * attachment is compressed and uploaded in parallel with a live percentage.
+   */
+  const send = useCallback(async () => {
+    if (!user) {
+      toast.error("You must be signed in.");
+      return;
+    }
+    const text = body.trim();
+    const picked = files;
+    if (!text && !picked.length) return;
+
+    setBody("");
+    setFiles([]);
+
+    const jobId = createClientId("job");
+    const label = picked.length
+      ? picked.length > 1
+        ? `${picked.length} attachments`
+        : picked[0]!.name
+      : "Message";
+    setJobs((current) => [
+      ...current,
+      { id: jobId, label, percent: 0, phase: picked.length ? "preparing" : "sending" },
+    ]);
+
+    const patch = (update: Partial<UploadJob>) =>
+      setJobs((current) => current.map((job) => (job.id === jobId ? { ...job, ...update } : job)));
+
+    try {
+      let attachments: NewAttachmentInput[] = [];
+      if (picked.length) {
+        const prepared = await prepareFiles(picked);
+        patch({ phase: "uploading", percent: 0 });
+
+        const progress = new Map<number, number>();
+        attachments = await Promise.all(
+          prepared.map(async (file, index) => {
+            const path = await uploadToWorkspace(user.id, file, file.name, {
+              folder: "chat",
+              onProgress: (percent) => {
+                progress.set(index, percent);
+                const total =
+                  [...progress.values()].reduce((sum, value) => sum + value, 0) / prepared.length;
+                patch({ percent: Math.round(total) });
+              },
+            });
+            return {
+              storage_path: path,
+              file_name: file.name,
+              mime_type: file.type || "application/octet-stream",
+              size_bytes: file.size,
+              kind: classifyFile(file.type),
+            } satisfies NewAttachmentInput;
+          }),
+        );
+      }
+
+      patch({ phase: "sending", percent: 100 });
+      await sendMessage({
         clientId: createClientId("msg"),
         authorId: user.id,
-        body: body.trim(),
+        body: text,
         channel,
         attachments,
       });
-    },
-    onSuccess: () => {
-      setBody("");
-      setFiles([]);
       void queryClient.invalidateQueries({ queryKey: ["messages", key] });
-    },
-    onError: (error) =>
-      toast.error(error instanceof Error ? error.message : "Message could not be sent"),
-  });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Message could not be sent");
+      setBody((current) => current || text);
+      setFiles((current) => (current.length ? current : picked));
+    } finally {
+      setJobs((current) => current.filter((job) => job.id !== jobId));
+    }
+  }, [body, channel, files, key, queryClient, user]);
+
+  const readAt = partnerRead.data ?? null;
+  const lastMine = [...(messages.data ?? [])].reverse().find((row) => row.author_id === user?.id);
 
   return (
     <div className="flex h-[calc(100vh-13rem)] min-h-[24rem] flex-col">
@@ -100,6 +190,7 @@ export function ChatThread({ channel, title }: { channel: ChannelRef; title: str
         ) : messages.data?.length ? (
           messages.data.map((message) => {
             const mine = message.author_id === user?.id;
+            const seen = Boolean(mine && readAt && message.created_at <= readAt);
             return (
               <div key={message.id} className={cn("flex gap-2", mine && "flex-row-reverse")}>
                 <UserAvatar profile={message.author} className="h-8 w-8" />
@@ -120,9 +211,19 @@ export function ChatThread({ channel, title }: { channel: ChannelRef; title: str
                       📎 {attachment.file_name} · {formatBytes(attachment.size_bytes)}
                     </p>
                   ))}
-                  <p className="mt-1 text-[0.65rem] opacity-70">
+                  <span className="mt-1 flex items-center gap-1 text-[0.65rem] opacity-70">
                     {formatClock(message.created_at)}
-                  </p>
+                    {mine && conversationId ? (
+                      seen ? (
+                        <>
+                          <CheckCheck className="h-3 w-3" aria-hidden />
+                          {message.id === lastMine?.id ? <span>Seen</span> : null}
+                        </>
+                      ) : (
+                        <Check className="h-3 w-3" aria-hidden />
+                      )
+                    ) : null}
+                  </span>
                 </div>
               </div>
             );
@@ -134,6 +235,33 @@ export function ChatThread({ channel, title }: { channel: ChannelRef; title: str
       </div>
 
       <div className="border-t border-border/60 p-3">
+        {jobs.length ? (
+          <ul className="mb-2 space-y-1" aria-live="polite">
+            {jobs.map((job) => (
+              <li key={job.id} className="glass-subtle rounded-xl px-3 py-2 text-xs">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate">
+                    {job.phase === "preparing"
+                      ? `Optimising ${job.label}…`
+                      : job.phase === "uploading"
+                        ? `Uploading ${job.label} · ${job.percent}%`
+                        : "Sending…"}
+                  </span>
+                  <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                </span>
+                {job.phase === "uploading" ? (
+                  <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-muted">
+                    <span
+                      className="block h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${Math.max(4, job.percent)}%` }}
+                    />
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+
         {files.length ? (
           <ul className="mb-2 flex flex-wrap gap-2">
             {files.map((file, index) => (
@@ -189,7 +317,7 @@ export function ChatThread({ channel, title }: { channel: ChannelRef; title: str
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                if (body.trim() || files.length) mutation.mutate();
+                if (body.trim() || files.length) void send();
               }
             }}
           />
@@ -198,14 +326,10 @@ export function ChatThread({ channel, title }: { channel: ChannelRef; title: str
             size="icon"
             className="rounded-xl"
             aria-label="Send message"
-            disabled={mutation.isPending || (!body.trim() && !files.length)}
-            onClick={() => mutation.mutate()}
+            disabled={!body.trim() && !files.length}
+            onClick={() => void send()}
           >
-            {mutation.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </Button>
         </div>
       </div>

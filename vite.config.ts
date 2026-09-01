@@ -26,6 +26,7 @@ export default defineConfig({
         manifest: false,
         manifestFilename: "manifest.webmanifest",
         workbox: {
+          importScripts: ["/sw-notifications.js"],
           globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
           navigateFallback: "/",
           navigateFallbackDenylist: [/^\/~oauth/, /^\/api\//],
