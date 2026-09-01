@@ -45,6 +45,54 @@ function safeName(name: string): string {
   return name.replace(/[^\w.\-]+/g, "_").slice(-80);
 }
 
+/** Streams the upload with real byte progress so the UI can show a live percentage. */
+async function uploadWithProgress(
+  bucket: string,
+  path: string,
+  file: File | Blob,
+  onProgress: (percent: number) => void,
+): Promise<boolean> {
+  const baseUrl = import.meta.env["VITE_SUPABASE_URL"];
+  const apiKey = import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"];
+  if (typeof XMLHttpRequest === "undefined" || !baseUrl || !apiKey) return false;
+
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return false;
+
+  return await new Promise<boolean>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", `${baseUrl}/storage/v1/object/${bucket}/${path}`);
+    request.setRequestHeader("authorization", `Bearer ${token}`);
+    request.setRequestHeader("apikey", apiKey);
+    request.setRequestHeader("x-upsert", "false");
+    request.setRequestHeader("cache-control", "3600");
+    request.setRequestHeader("content-type", file.type || "application/octet-stream");
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(Math.min(99, Math.round((event.loaded / event.total) * 100)));
+      }
+    };
+    request.onload = () => {
+      if (request.status >= 200 && request.status < 300) {
+        onProgress(100);
+        resolve(true);
+      } else {
+        let message = `Upload failed (${request.status})`;
+        try {
+          const parsed = JSON.parse(request.responseText) as { message?: string; error?: string };
+          message = parsed.message ?? parsed.error ?? message;
+        } catch {
+          /* keep the generic message */
+        }
+        reject(new Error(message));
+      }
+    };
+    request.onerror = () => resolve(false);
+    request.send(file);
+  });
+}
+
 export async function uploadToWorkspace(
   userId: string,
   file: File | Blob,
@@ -55,7 +103,12 @@ export async function uploadToWorkspace(
   const folder = options.folder ? `${options.folder}/` : "";
   const path = `${userId}/${folder}${Date.now()}-${safeName(fileName)}`;
 
-  options.onProgress?.(10);
+  options.onProgress?.(1);
+  if (options.onProgress) {
+    const streamed = await uploadWithProgress(bucket, path, file, options.onProgress);
+    if (streamed) return path;
+  }
+
   const { error } = await supabase.storage.from(bucket).upload(path, file, {
     cacheControl: "3600",
     upsert: false,
@@ -65,6 +118,7 @@ export async function uploadToWorkspace(
   options.onProgress?.(100);
   return path;
 }
+
 
 const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
