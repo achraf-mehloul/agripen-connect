@@ -111,21 +111,41 @@ export async function ensureConversation(userId: string, partnerId: string): Pro
     .select("*")
     .eq("pair_key", pairKey)
     .maybeSingle();
-  if (existing) return existing;
 
-  const { data, error } = await supabase
-    .from("conversations")
-    .insert({ pair_key: pairKey, created_by: userId })
-    .select("*")
-    .single();
-  if (error) throw new Error(error.message);
+  let conversation = existing ?? null;
 
-  const { error: participantError } = await supabase.from("conversation_participants").insert([
-    { conversation_id: data.id, user_id: userId },
-    { conversation_id: data.id, user_id: partnerId },
-  ]);
+  if (!conversation) {
+    const { data, error } = await supabase
+      .from("conversations")
+      .insert({ pair_key: pairKey, created_by: userId })
+      .select("*")
+      .maybeSingle();
+
+    if (data) {
+      conversation = data;
+    } else {
+      // Another client may have created it first (unique pair_key).
+      const { data: retry } = await supabase
+        .from("conversations")
+        .select("*")
+        .eq("pair_key", pairKey)
+        .maybeSingle();
+      if (!retry) throw new Error(error?.message ?? "Conversation could not be created");
+      conversation = retry;
+    }
+  }
+
+  const { error: participantError } = await supabase
+    .from("conversation_participants")
+    .upsert(
+      [
+        { conversation_id: conversation.id, user_id: userId },
+        { conversation_id: conversation.id, user_id: partnerId },
+      ],
+      { onConflict: "conversation_id,user_id", ignoreDuplicates: true },
+    );
   if (participantError) throw new Error(participantError.message);
-  return data;
+  return conversation;
 }
 
 export async function fetchDirectConversations(userId: string): Promise<DirectConversation[]> {
