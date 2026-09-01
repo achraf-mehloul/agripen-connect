@@ -213,6 +213,32 @@ export async function markConversationRead(conversationId: string, userId: strin
     .eq("user_id", userId);
 }
 
+/** Latest moment the other participant opened this conversation (drives "Seen" ticks). */
+export async function fetchPartnerReadAt(
+  conversationId: string,
+  userId: string,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("conversation_participants")
+    .select("user_id, last_read_at")
+    .eq("conversation_id", conversationId)
+    .neq("user_id", userId);
+  if (error) throw new Error(error.message);
+  const stamps = (data ?? []).map((row) => row.last_read_at).filter(Boolean);
+  if (!stamps.length) return null;
+  return stamps.sort().at(-1) ?? null;
+}
+
+/** Conversation ids the signed-in user takes part in (used for message alerts). */
+export async function fetchMyConversationIds(userId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("conversation_participants")
+    .select("conversation_id")
+    .eq("user_id", userId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => row.conversation_id);
+}
+
 export async function hydrateMessage(row: MessageRow): Promise<ChatMessage> {
   const [{ data: attachments }, profiles] = await Promise.all([
     supabase.from("message_attachments").select("*").eq("message_id", row.id),
