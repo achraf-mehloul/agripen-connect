@@ -17,6 +17,9 @@ import {
 import { fetchTeam } from "@/services/profile-service";
 
 export const Route = createFileRoute("/_authenticated/messages")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    c: typeof search["c"] === "string" ? (search["c"] as string) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Direct messages — AgriPen Team App" },
@@ -30,6 +33,7 @@ export const Route = createFileRoute("/_authenticated/messages")({
   }),
   component: MessagesPage,
 });
+
 
 function MessagesPage() {
   const { user } = useAuth();
