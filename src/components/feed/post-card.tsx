@@ -24,27 +24,61 @@ import type { FeedPost, PostAttachment } from "@/types/domain";
 const EMOJIS = ["👍", "🌱", "🔥", "🎉"];
 
 function AttachmentView({ attachment }: { attachment: PostAttachment }) {
-  const { data: url } = useSignedUrl(attachment.storage_path, WORKSPACE_BUCKET);
+  const { data: url, refresh } = useSignedUrl(attachment.storage_path, WORKSPACE_BUCKET);
+  const [viewing, setViewing] = useState(false);
+
+  const lightbox =
+    viewing && url ? (
+      <MediaLightbox
+        item={{
+          url,
+          fileName: attachment.file_name,
+          storagePath: attachment.storage_path,
+          bucket: WORKSPACE_BUCKET,
+          kind: attachment.kind === "video" ? "video" : "image",
+        }}
+        onClose={() => setViewing(false)}
+      />
+    ) : null;
 
   if (attachment.kind === "image") {
     return url ? (
-      <img
-        src={url}
-        alt={attachment.file_name}
-        loading="lazy"
-        className="max-h-[26rem] w-full rounded-2xl border border-border object-cover"
-      />
+      <>
+        <button
+          type="button"
+          onClick={() => setViewing(true)}
+          className="block w-full"
+          aria-label={`Open ${attachment.file_name}`}
+        >
+          <img
+            src={url}
+            alt={attachment.file_name}
+            loading="lazy"
+            onError={refresh}
+            className="max-h-[26rem] w-full rounded-2xl border border-border object-cover"
+          />
+        </button>
+        {lightbox}
+      </>
     ) : (
       <div className="h-48 w-full animate-pulse rounded-2xl bg-muted" />
     );
   }
   if (attachment.kind === "video") {
     return url ? (
-      <video src={url} controls className="w-full rounded-2xl border border-border" />
+      <>
+        <video
+          src={url}
+          controls
+          onError={refresh}
+          className="w-full rounded-2xl border border-border"
+        />
+        {lightbox}
+      </>
     ) : null;
   }
   if (attachment.kind === "audio") {
-    return url ? <audio src={url} controls className="w-full" /> : null;
+    return url ? <audio src={url} controls onError={refresh} className="w-full" /> : null;
   }
   return (
     <button
@@ -64,6 +98,7 @@ function AttachmentView({ attachment }: { attachment: PostAttachment }) {
     </button>
   );
 }
+
 
 export function PostCard({ post }: { post: FeedPost }) {
   const { user, isAdmin } = useAuth();
