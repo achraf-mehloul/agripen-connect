@@ -62,10 +62,19 @@ function MessagesPage() {
       toast.error(error instanceof Error ? error.message : "Conversation could not be opened"),
   });
 
+  // Opens the conversation referenced by a notification link (/messages?c=<id>).
+  useEffect(() => {
+    if (!linkedConversationId) return;
+    setConversationId(linkedConversationId);
+    const row = conversations.data?.find((item) => item.conversation.id === linkedConversationId);
+    if (row) setPartnerName(fullName(row.partner.first_name, row.partner.last_name));
+  }, [conversations.data, linkedConversationId]);
+
   useEffect(() => {
     if (!conversationId || !user?.id) return;
     void markConversationRead(conversationId, user.id);
   }, [conversationId, user?.id]);
+
 
   const others = (team.data ?? []).filter(
     (profile) =>
