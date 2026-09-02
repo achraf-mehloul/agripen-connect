@@ -207,10 +207,9 @@ export function ChatThread({ channel, title }: { channel: ChannelRef; title: str
                   ) : null}
                   {message.body ? <p className="whitespace-pre-wrap">{message.body}</p> : null}
                   {message.attachments.map((attachment) => (
-                    <p key={attachment.id} className="mt-1 text-xs opacity-80">
-                      📎 {attachment.file_name} · {formatBytes(attachment.size_bytes)}
-                    </p>
+                    <ChatAttachment key={attachment.id} attachment={attachment} />
                   ))}
+
                   <span className="mt-1 flex items-center gap-1 text-[0.65rem] opacity-70">
                     {formatClock(message.created_at)}
                     {mine && conversationId ? (
