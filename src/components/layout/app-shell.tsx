@@ -23,6 +23,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  useDirectMessageAlerts();
+
+
   useEffect(() => setDrawerOpen(false), [pathname]);
 
   useEffect(() => {
