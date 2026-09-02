@@ -4,6 +4,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { UserAvatar } from "@/components/common/user-avatar";
+import { MediaLightbox } from "@/components/media/media-lightbox";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSignedUrl } from "@/hooks/use-signed-url";
