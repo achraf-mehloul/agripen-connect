@@ -122,6 +122,13 @@ export async function uploadToWorkspace(
 
 const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
 
+/** Drops a cached signed URL so the next request mints a fresh one. */
+export function clearSignedUrl(path: string, bucket: string = WORKSPACE_BUCKET) {
+  signedUrlCache.delete(`${bucket}:${path}`);
+}
+
+
+
 /** Buckets are private, so every render path resolves media through short-lived signed URLs. */
 export async function getSignedUrl(
   path: string,
