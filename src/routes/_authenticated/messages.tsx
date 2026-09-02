@@ -38,9 +38,11 @@ export const Route = createFileRoute("/_authenticated/messages")({
 function MessagesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { c: linkedConversationId } = Route.useSearch();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState("");
   const [search, setSearch] = useState("");
+
 
   const conversations = useQuery({
     queryKey: ["conversations", user?.id],
