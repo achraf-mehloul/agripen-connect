@@ -4,8 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { UserAvatar } from "@/components/common/user-avatar";
+import { MediaLightbox } from "@/components/media/media-lightbox";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useSignedUrl } from "@/hooks/use-signed-url";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { formatBytes, formatClock, fullName } from "@/lib/format";
@@ -16,10 +18,12 @@ import type { ChannelRef } from "@/services/message-service";
 import { fetchMessages, fetchPartnerReadAt, sendMessage } from "@/services/message-service";
 import {
   classifyFile,
+  downloadFile,
   uploadToWorkspace,
   validateUpload,
+  WORKSPACE_BUCKET,
 } from "@/services/storage-service";
-import type { NewAttachmentInput } from "@/types/domain";
+import type { MessageAttachment, NewAttachmentInput } from "@/types/domain";
 
 function channelKey(channel: ChannelRef): string {
   return "groupId" in channel ? `group:${channel.groupId}` : `dm:${channel.conversationId}`;
@@ -31,6 +35,79 @@ type UploadJob = {
   percent: number;
   phase: "preparing" | "uploading" | "sending";
 };
+
+/** Chat media: images and videos preview inline and open in the in-app viewer. */
+function ChatAttachment({ attachment }: { attachment: MessageAttachment }) {
+  const isMedia = attachment.kind === "image" || attachment.kind === "video";
+  const { data: url, refresh } = useSignedUrl(
+    isMedia ? attachment.storage_path : null,
+    WORKSPACE_BUCKET,
+  );
+  const [viewing, setViewing] = useState(false);
+
+  if (isMedia) {
+    return (
+      <>
+        <button
+          type="button"
+          onClick={() => url && setViewing(true)}
+          className="mt-1.5 block w-full overflow-hidden rounded-xl border border-border/50"
+          aria-label={`Open ${attachment.file_name}`}
+        >
+          {url ? (
+            attachment.kind === "image" ? (
+              <img
+                src={url}
+                alt={attachment.file_name}
+                loading="lazy"
+                onError={refresh}
+                className="max-h-64 w-full object-cover"
+              />
+            ) : (
+              <video
+                src={url}
+                onError={refresh}
+                muted
+                playsInline
+                preload="metadata"
+                className="max-h-64 w-full object-cover"
+              />
+            )
+          ) : (
+            <span className="block h-32 w-full animate-pulse bg-muted" />
+          )}
+        </button>
+        {viewing && url ? (
+          <MediaLightbox
+            item={{
+              url,
+              fileName: attachment.file_name,
+              storagePath: attachment.storage_path,
+              bucket: WORKSPACE_BUCKET,
+              kind: attachment.kind === "video" ? "video" : "image",
+            }}
+            onClose={() => setViewing(false)}
+          />
+        ) : null}
+      </>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        void downloadFile(attachment.storage_path, attachment.file_name).catch((error) =>
+          toast.error(error instanceof Error ? error.message : "Download failed"),
+        )
+      }
+      className="mt-1 block text-left text-xs underline opacity-80"
+    >
+      📎 {attachment.file_name} · {formatBytes(attachment.size_bytes)}
+    </button>
+  );
+}
+
 
 export function ChatThread({ channel, title }: { channel: ChannelRef; title: string }) {
   const { user } = useAuth();
@@ -207,10 +284,9 @@ export function ChatThread({ channel, title }: { channel: ChannelRef; title: str
                   ) : null}
                   {message.body ? <p className="whitespace-pre-wrap">{message.body}</p> : null}
                   {message.attachments.map((attachment) => (
-                    <p key={attachment.id} className="mt-1 text-xs opacity-80">
-                      📎 {attachment.file_name} · {formatBytes(attachment.size_bytes)}
-                    </p>
+                    <ChatAttachment key={attachment.id} attachment={attachment} />
                   ))}
+
                   <span className="mt-1 flex items-center gap-1 text-[0.65rem] opacity-70">
                     {formatClock(message.created_at)}
                     {mine && conversationId ? (

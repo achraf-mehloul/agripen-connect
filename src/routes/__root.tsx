@@ -150,9 +150,22 @@ function RootComponent() {
   }, [queryClient, router]);
 
   const persistOptions = useMemo(
-    () => (persister ? { persister, maxAge: 1000 * 60 * 60 * 24 * 7 } : null),
+    () =>
+      persister
+        ? {
+            persister,
+            maxAge: 1000 * 60 * 60 * 24 * 7,
+            dehydrateOptions: {
+              // Signed storage URLs expire within the hour, so never persist them:
+              // a restored expired URL makes images render once and then break.
+              shouldDehydrateQuery: (query: { queryKey: readonly unknown[] }) =>
+                query.queryKey[0] !== "signed-url",
+            },
+          }
+        : null,
     [persister],
   );
+
 
   const tree = (
     <AuthProvider>

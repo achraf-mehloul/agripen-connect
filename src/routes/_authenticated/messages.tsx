@@ -17,6 +17,9 @@ import {
 import { fetchTeam } from "@/services/profile-service";
 
 export const Route = createFileRoute("/_authenticated/messages")({
+  validateSearch: (search: Record<string, unknown>) => ({
+    c: typeof search["c"] === "string" ? (search["c"] as string) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Direct messages — AgriPen Team App" },
@@ -31,12 +34,15 @@ export const Route = createFileRoute("/_authenticated/messages")({
   component: MessagesPage,
 });
 
+
 function MessagesPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { c: linkedConversationId } = Route.useSearch();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [partnerName, setPartnerName] = useState("");
   const [search, setSearch] = useState("");
+
 
   const conversations = useQuery({
     queryKey: ["conversations", user?.id],
@@ -56,10 +62,19 @@ function MessagesPage() {
       toast.error(error instanceof Error ? error.message : "Conversation could not be opened"),
   });
 
+  // Opens the conversation referenced by a notification link (/messages?c=<id>).
+  useEffect(() => {
+    if (!linkedConversationId) return;
+    setConversationId(linkedConversationId);
+    const row = conversations.data?.find((item) => item.conversation.id === linkedConversationId);
+    if (row) setPartnerName(fullName(row.partner.first_name, row.partner.last_name));
+  }, [conversations.data, linkedConversationId]);
+
   useEffect(() => {
     if (!conversationId || !user?.id) return;
     void markConversationRead(conversationId, user.id);
   }, [conversationId, user?.id]);
+
 
   const others = (team.data ?? []).filter(
     (profile) =>

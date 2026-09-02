@@ -8,7 +8,9 @@ import { NAV_ITEMS } from "@/components/layout/nav-items";
 import { NotificationBell } from "@/components/layout/notification-bell";
 import { UserAvatar } from "@/components/common/user-avatar";
 import { Button } from "@/components/ui/button";
+import { useDirectMessageAlerts } from "@/hooks/use-direct-message-alerts";
 import { useOnlineStatus } from "@/hooks/use-online-status";
+
 import { useAuth } from "@/lib/auth/auth-context";
 import { fullName } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -20,6 +22,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const online = useOnlineStatus();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useDirectMessageAlerts();
+
 
   useEffect(() => setDrawerOpen(false), [pathname]);
 
